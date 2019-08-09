@@ -9,7 +9,11 @@ request(
     // Checking that there is no errors and the response code is correct
     if (!error && response.statusCode === 200) {
       // Declaring cheerio for future usage
-      const $ = cheerio.load(html);
+      const $ = cheerio.load(html, {
+        xml: {
+          normalizeWhitespace: true
+        }
+      });
 
       // Looking at the inspector or source code we will select the following id value
       const siteHeading = $('.found_content.last-view-data')
@@ -29,25 +33,17 @@ request(
           const address = $(flatData[0])
             .children('.col-md-8')
             .children('div')
-            .text();
+            .contents()
+            .map(function() {
+              return $(this)
+                .text()
+                .trim();
+            })
+            .get();
 
-          const area = $(flatData[0])
-            .children('.col-md-8')
-            .children('.fs-12')
-            .text();
-
-          const subway = $(flatData[0])
-            .children('.col-md-8')
-            .find('div.gr')
-            .each((i, el) => $(el).text());
-          // .get();
-
-          // console.log(subway);
+          console.log('---------------------------------');
+          console.log(address);
         });
-
-      // Showing our result on the console
-      // console.log(siteHeading.html());
-      console.log(href);
     }
   }
 );
