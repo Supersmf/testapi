@@ -1,8 +1,7 @@
-// Requiring two of our dependencies
 const request = require('request');
 const cheerio = require('cheerio');
 let data = [];
-// Requesting to the website
+
 request(
   'https://domovita.by/minsk/1-room-flats/rent',
   (error, response, html) => {
@@ -13,23 +12,18 @@ request(
         }
       });
 
-      const siteHeading = $('.found_content.last-view-data')
-        .find('div > a')
-        .each((index, element) => {
-          const images = $(element)
-            .find('li')
-            .map((i, imgElement) =>
-              $(imgElement)
-                .find('div')
-                .attr('data-url-mini')
-            )
+      const contentList = $('.found_content.last-view-data > div')
+        .filter((index, element) => !$(element).attr('class'))
+        .each((indx, elt) => {
+          const images = $(elt)
+            .find('li.slider-img-in-listing__item > div')
+            .map((i, el) => $(el).attr('data-url-mini'))
             .get();
 
-          const flatData = Array.from($(element).find('.found_full > div.row'));
+          const flatData = Array.from($(elt).find('.found_full > div'));
 
           const address = $(flatData[0])
             .children('.col-md-8')
-            .children('div')
             .contents()
             .map(function() {
               return $(this)
@@ -49,8 +43,8 @@ request(
               city: address[0].split(',')[1].trim(),
               street: address[0].split(',')[2].trim(),
               apartment: address[0].split(',')[3].trim(),
-              place: address[1],
-              subway: address[2],
+              place: address[1].split(';')[0].trim(),
+              subway: address[1].split(';')[1],
               price: price.split('&')[0]
             });
           }
