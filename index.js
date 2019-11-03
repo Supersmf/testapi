@@ -2,6 +2,23 @@ const request = require('request');
 const cheerio = require('cheerio');
 let data = [];
 
+const houseParams = {
+  CITY: 'Город',
+  AREA: 'Район',
+  SUBWAY: 'Метро',
+  ADDRESS: 'Адрес'
+};
+
+const flatParams = {
+  TOTAL_AREA: 'Общая площадь',
+  LIVING_AREA: 'Жилая площадь',
+  KITCHEN: 'Кухня',
+  ROOMS: 'Комнат',
+  FLOOR: 'Этаж'
+};
+
+const OWNER = 'Собственник';
+
 request(
   'https://domovita.by/minsk/1-room-flats/rent',
   (error, response, html) => {
@@ -14,17 +31,63 @@ request(
 
       const contentList = $('.found_content.last-view-data > div')
         .filter((index, element) => !$(element).attr('class'))
-        .each((indx, elt) => {
+        .each(async (indx, elt) => {
           const images = $(elt)
             .find('li.slider-img-in-listing__item > div')
             .map((i, el) => $(el).attr('data-url-mini'))
             .get();
 
-          const flatData = Array.from($(elt).find('.found_full > div'));
+          const url = $(elt)
+            .find('a')
+            .attr('href');
 
-          const address = $(flatData[0])
-            .children('.col-md-8')
-            .contents()
+          if (url) {
+            const params = await itemParse(url);
+            data.push({ ...params, images });
+            console.log('params', { ...params, images });
+          }
+        });
+    }
+  }
+);
+
+const itemParse = url =>
+  new Promise((resolve, reject) => {
+    request(url, (error, response, html) => {
+      if (!error && response.statusCode === 200) {
+        const $ = cheerio.load(html, {
+          xml: {
+            normalizeWhitespace: true
+          }
+        });
+
+        const price = parseInt(
+          $('.object-head__price-main .calculator__price-main')
+            .text()
+            .split('/мес.')
+            .find(item => ~item.indexOf('$'))
+        );
+        const publicationDate = $('.publication-info__publication-date')
+          .text()
+          .trim()
+          .split(' ')[1];
+        const updateDate = $('.publication-info__update-date')
+          .text()
+          .trim()
+          .split(' ')[1];
+        const ownerName = $('.owner-info__name').text();
+        const ownerPhone = $('.owner-info__phone').text();
+        const isOwner = $('.owner-info__status').text() === OWNER;
+        const isRefrigerator = !!$('.icon-dom-refrigerator').length;
+        const isElevator = !!$('.icon-dom-building_elevator').length;
+        const isWiFi = !!$('.icon-dom-wifi').length;
+        const isFurniture = !!$('.icon-dom-sofa').length;
+        const isWashingMachine = !!$('.icon-dom-washing-machine').length;
+        const description = $('#object-description').text();
+        const params = $('div.object-info__params');
+        const getParams = params =>
+          $(params)
+            .find('.object-info__parametr')
             .map(function() {
               return $(this)
                 .text()
@@ -32,24 +95,63 @@ request(
             })
             .get();
 
-          const price = $(flatData[0])
-            .find('div.price.mb-2.mt-10 ')
-            .first()
-            .text();
+        const getCurrentParam = (str, params) => {
+          const currentParam = params.find(param => ~param.indexOf(str));
+          return currentParam
+            ? currentParam
+                .split(' ')
+                .splice(1)
+                .join(' ')
+                .trim()
+            : '';
+        };
+        const addressParams = getParams(params[0]);
+        const apartmentParams = getParams(params[1]);
+        const getAddressParams = param => getCurrentParam(param, addressParams);
+        const getApartmentParams = param =>
+          getCurrentParam(param, apartmentParams);
 
-          if (address.length) {
-            data.push({
-              images,
-              city: address[0].split(',')[1].trim(),
-              street: address[0].split(',')[2].trim(),
-              apartment: address[0].split(',')[3].trim(),
-              place: address[1].split(';')[0].trim(),
-              subway: address[1].split(';')[1],
-              price: price.split('&')[0]
-            });
-          }
+        const city = getAddressParams(houseParams.CITY);
+        const area = getAddressParams(houseParams.AREA);
+        const subway = getAddressParams(houseParams.SUBWAY);
+        const address = getAddressParams(houseParams.ADDRESS);
+        const totalArea = getApartmentParams(flatParams.TOTAL_AREA).match(
+          /[\d|.|e|E|\+]+/g
+        )[0];
+        const livingArea = getApartmentParams(flatParams.LIVING_AREA).match(
+          /[\d|.|e|E|\+]+/g
+        )[0];
+        const kitchenArea = getApartmentParams(flatParams.KITCHEN).split(
+          ' '
+        )[0];
+        const roomsCount = getApartmentParams(flatParams.ROOMS);
+        const floor = getApartmentParams(flatParams.FLOOR);
+
+        resolve({
+          city,
+          area,
+          subway,
+          address,
+          isOwner,
+          ownerName,
+          ownerPhone,
+          price,
+          totalArea,
+          livingArea,
+          kitchenArea,
+          roomsCount,
+          floor,
+          facilities: {
+            isRefrigerator,
+            isElevator,
+            isWiFi,
+            isFurniture,
+            isWashingMachine
+          },
+          publicationDate,
+          updateDate,
+          description
         });
-    }
-    console.log(data);
-  }
-);
+      }
+    });
+  });
