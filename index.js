@@ -1,6 +1,5 @@
 const request = require('request');
 const cheerio = require('cheerio');
-let data = [];
 
 const houseParams = {
   CITY: 'Город',
@@ -17,11 +16,25 @@ const flatParams = {
   FLOOR: 'Этаж'
 };
 
-const OWNER = 'Собственник';
+const MAX_ITEM_FETCH = 10;
 
-request(
-  'https://domovita.by/minsk/1-room-flats/rent',
-  (error, response, html) => {
+const OWNER = 'Собственник';
+// request(
+//   'https://domovita.by/minsk/1-room-flats/rent',
+//   (error, response, html) => {
+//     if (!error && response.statusCode === 200) {
+//       const promises = parse(html);
+//       console.log(promises);
+
+//       // Promise.all(promises).then(data => console.log(data));
+//     }
+//   }
+// );
+
+const parse = (url = 'https://domovita.by/minsk/1-room-flats/rent') => {
+  let globalPromise = Promise.resolve();
+  const data = [];
+  request(url, (error, response, html) => {
     if (!error && response.statusCode === 200) {
       const $ = cheerio.load(html, {
         xml: {
@@ -31,27 +44,34 @@ request(
 
       const contentList = $('.found_content.last-view-data > div')
         .filter((index, element) => !$(element).attr('class'))
-        .each(async (indx, elt) => {
-          const images = $(elt)
-            .find('li.slider-img-in-listing__item > div')
-            .map((i, el) => $(el).attr('data-url-mini'))
-            .get();
-
-          const url = $(elt)
-            .find('a')
-            .attr('href');
-
-          if (url) {
-            const params = await itemParse(url);
-            data.push({ ...params, images });
-            console.log('params', { ...params, images });
+        .each(async (index, elt) => {
+          if (index > MAX_ITEM_FETCH) {
+            return;
           }
+          globalPromise = globalPromise.then(async () => {
+            const images = $(elt)
+              .find('li.slider-img-in-listing__item > div')
+              .map((i, el) => $(el).attr('data-url-mini'))
+              .get();
+
+            const url = $(elt)
+              .find('a')
+              .attr('href');
+
+            if (url) {
+              // promises.push(itemParse(url, images));
+              const parsedItem = await itemParse(url);
+              data.push({ ...parsedItem, images });
+              console.log(parsedItem.city);
+            }
+          });
         });
     }
-  }
-);
+  });
+  return globalPromise.then(() => data);
+};
 
-const itemParse = url =>
+const itemParse = (url, images) =>
   new Promise((resolve, reject) => {
     request(url, (error, response, html) => {
       if (!error && response.statusCode === 200) {
@@ -115,6 +135,8 @@ const itemParse = url =>
         const area = getAddressParams(houseParams.AREA);
         const subway = getAddressParams(houseParams.SUBWAY);
         const address = getAddressParams(houseParams.ADDRESS);
+        // console.log(address);
+
         const totalArea = getApartmentParams(flatParams.TOTAL_AREA).match(
           /[\d|.|e|E|\+]+/g
         )[0];
@@ -150,8 +172,17 @@ const itemParse = url =>
           },
           publicationDate,
           updateDate,
-          description
+          description,
+          images
         });
       }
     });
+    //, 10000
+    // );
   });
+
+const test = async () => {
+  console.log(await parse());
+};
+
+test();
