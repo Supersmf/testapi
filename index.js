@@ -16,58 +16,47 @@ const flatParams = {
   FLOOR: 'Этаж'
 };
 
-const MAX_ITEM_FETCH = 10;
-
 const OWNER = 'Собственник';
-// request(
-//   'https://domovita.by/minsk/1-room-flats/rent',
-//   (error, response, html) => {
-//     if (!error && response.statusCode === 200) {
-//       const promises = parse(html);
-//       console.log(promises);
 
-//       // Promise.all(promises).then(data => console.log(data));
-//     }
-//   }
-// );
-
-const parse = (url = 'https://domovita.by/minsk/1-room-flats/rent') => {
-  let globalPromise = Promise.resolve();
-  const data = [];
-  request(url, (error, response, html) => {
+request(
+  'https://domovita.by/minsk/1-room-flats/rent',
+  async (error, response, html) => {
     if (!error && response.statusCode === 200) {
-      const $ = cheerio.load(html, {
-        xml: {
-          normalizeWhitespace: true
-        }
-      });
+      const promises = await parse(html);
+      console.log(promises);
+    }
+  }
+);
 
-      const contentList = $('.found_content.last-view-data > div')
-        .filter((index, element) => !$(element).attr('class'))
-        .each(async (index, elt) => {
-          if (index > MAX_ITEM_FETCH) {
-            return;
-          }
-          globalPromise = globalPromise.then(async () => {
-            const images = $(elt)
-              .find('li.slider-img-in-listing__item > div')
-              .map((i, el) => $(el).attr('data-url-mini'))
-              .get();
-
-            const url = $(elt)
-              .find('a')
-              .attr('href');
-
-            if (url) {
-              // promises.push(itemParse(url, images));
-              const parsedItem = await itemParse(url);
-              data.push({ ...parsedItem, images });
-              console.log(parsedItem.city);
-            }
-          });
-        });
+const parse = html => {
+  const $ = cheerio.load(html, {
+    xml: {
+      normalizeWhitespace: true
     }
   });
+
+  let globalPromise = Promise.resolve();
+  const data = [];
+  const contentList = $('.found_content.last-view-data > div')
+    .filter((index, element) => !$(element).attr('class'))
+    .each(async (index, elt) => {
+      globalPromise = globalPromise.then(async () => {
+        const images = $(elt)
+          .find('li.slider-img-in-listing__item > div')
+          .map((i, el) => $(el).attr('data-url-mini'))
+          .get();
+
+        const url = $(elt)
+          .find('a')
+          .attr('href');
+
+        if (url) {
+          const parsedItem = await itemParse(url);
+          data.push({ ...parsedItem, images });
+        }
+      });
+    });
+
   return globalPromise.then(() => data);
 };
 
@@ -135,7 +124,6 @@ const itemParse = (url, images) =>
         const area = getAddressParams(houseParams.AREA);
         const subway = getAddressParams(houseParams.SUBWAY);
         const address = getAddressParams(houseParams.ADDRESS);
-        // console.log(address);
 
         const totalArea = getApartmentParams(flatParams.TOTAL_AREA).match(
           /[\d|.|e|E|\+]+/g
@@ -177,12 +165,4 @@ const itemParse = (url, images) =>
         });
       }
     });
-    //, 10000
-    // );
   });
-
-const test = async () => {
-  console.log(await parse());
-};
-
-test();
