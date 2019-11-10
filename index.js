@@ -18,15 +18,43 @@ const flatParams = {
 
 const OWNER = 'Собственник';
 
-request(
-  'https://domovita.by/minsk/1-room-flats/rent',
-  async (error, response, html) => {
-    if (!error && response.statusCode === 200) {
-      const promises = await parse(html);
-      console.log(promises);
-    }
-  }
-);
+const delay = (delayTime, value) =>
+  new Promise(function(resolve) {
+    setTimeout(resolve.bind(null, value), delayTime);
+  });
+
+const getApartment = url =>
+  new Promise((resolve, reject) => {
+    request(url, async (error, response, html) => {
+      if (!error && response.statusCode === 200) {
+        resolve(await parse(html));
+      }
+    });
+  });
+
+const getAllApartments = async () => {
+  let globalPromise = Promise.resolve();
+  const data = [];
+  [
+    'https://domovita.by/minsk/1-room-flats/rent',
+    'https://domovita.by/minsk/2-room-flats/rent',
+    'https://domovita.by/minsk/3-room-flats/rent',
+    'https://domovita.by/minsk/flats/rent?rooms=%3E3'
+  ].forEach(async url => {
+    globalPromise = globalPromise.then(() =>
+      delay(5000).then(async () => data.push(await getApartment(url)))
+    );
+  });
+
+  return globalPromise.then(() => data);
+};
+
+// getAllApartments().then(data => console.log(data));
+const tt = async () => {
+  console.log(await getAllApartments());
+};
+
+tt();
 
 const parse = html => {
   const $ = cheerio.load(html, {
@@ -76,6 +104,10 @@ const itemParse = (url, images) =>
             .split('/мес.')
             .find(item => ~item.indexOf('$'))
         );
+        const innerId = $('.publication-info__object-id')
+          .text()
+          .trim()
+          .split(' ')[2];
         const publicationDate = $('.publication-info__publication-date')
           .text()
           .trim()
@@ -158,10 +190,12 @@ const itemParse = (url, images) =>
             isFurniture,
             isWashingMachine
           },
+          innerId,
           publicationDate,
           updateDate,
           description,
-          images
+          images,
+          url
         });
       }
     });
